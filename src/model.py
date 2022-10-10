@@ -46,18 +46,6 @@ class Model(object):
         self.item_eb = self.mid_batch_embedded
         self.item_his_eb = self.mid_his_batch_embedded * tf.reshape(self.mask, (-1, seq_len, 1))
 
-    def build_sampled_softmax_loss(self, item_emb, user_emb):
-        self.check_rkpct(item_emb, user_emb)
-        self.loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(self.mid_embeddings_var, self.mid_embeddings_bias, tf.reshape(self.mid_batch_ph, [-1, 1]), user_emb, self.neg_num * self.batch_size, self.n_mid))
-        if self.l2_reg > 0:
-            l2_loss = 0.0
-            regularizer = tf.contrib.layers.l2_regularizer(self.l2_reg)
-            for var in tf.trainable_variables():
-                l2_loss += regularizer(var)
-            self.loss += l2_loss
-
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
-
     def build_sampled_pt_loss(self, item_emb, user_emb):
         if self.unit:
             item_norm = tf.reduce_sum(tf.square(item_emb), -1) + 1e-8
@@ -112,49 +100,33 @@ class Model(object):
             'distexps': tf.distributions.Exponential(rate=0.1),
             'distexpss': tf.distributions.Exponential(rate=0.2),
             'distexpsss': tf.distributions.Exponential(rate=0.5),
-            'distexpssss': tf.distributions.Exponential(rate=1.0),
             'distgamma0': tf.distributions.Gamma(concentration=1.0, rate=0.05),
-            'distgamma0ssss': tf.distributions.Gamma(concentration=1.0, rate=1.0),
-            'distgamma02sss': tf.distributions.Gamma(concentration=1.1, rate=0.5),
             'distgamma1f': tf.distributions.Gamma(concentration=1.025, rate=0.025),
             'distgamma1': tf.distributions.Gamma(concentration=1.05, rate=0.05),
             'distgamma1s': tf.distributions.Gamma(concentration=1.1, rate=0.1),
-            'distgamma1sss': tf.distributions.Gamma(concentration=1.5, rate=0.5),
             'distgamma2': tf.distributions.Gamma(concentration=1.1, rate=0.05),
-            'distgamma5': tf.distributions.Gamma(concentration=1.25, rate=0.05),
         }
         pari2grad_dict = {
             'gradzero': lambda x: tf.ones_like(x) * tf.log(N+1) / N,
             'gradtail06': lambda x: 0.4 * tf.log(N+1) * tf.pow(R * x, -0.6) / (tf.pow(N+1, 0.4) - 1),
-            'gradtail07': lambda x: 0.3 * tf.log(N+1) * tf.pow(R * x, -0.7) / (tf.pow(N+1, 0.3) - 1),
             'gradtail08': lambda x: 0.2 * tf.log(N+1) * tf.pow(R * x, -0.8) / (tf.pow(N+1, 0.2) - 1),
             'gradeven': lambda x: 1 / x,
-            # 'gradhead12': lambda x: -0.2 * tf.log(N+1) * tf.pow(R, -0.2) * tf.pow(x, -1.2) / (tf.pow(N+1, -0.2) - 1),
             'gradhead12': lambda x: -0.2 * tf.log(N+1) * tf.pow(R * x, -1.2) / (tf.pow(N+1, -0.2) - 1),
             'gradhead14': lambda x: -0.4 * tf.log(N+1) * tf.pow(R * x, -1.4) / (tf.pow(N+1, -0.4) - 1),
-            'gradhead15': lambda x: -0.5 * tf.log(N+1) * tf.pow(R * x, -1.5) / (tf.pow(N+1, -0.5) - 1),
             'gradhead16': lambda x: -0.6 * tf.log(N+1) * tf.pow(R * x, -1.6) / (tf.pow(N+1, -0.6) - 1),
             'gradhead18': lambda x: -0.8 * tf.log(N+1) * tf.pow(R * x, -1.8) / (tf.pow(N+1, -0.8) - 1),
             'gradhead20': lambda x: -1.0 * tf.log(N+1) * tf.pow(R * x, -2.0) / (tf.pow(N+1, -1.0) - 1),
-            'gradhead25': lambda x: -1.5 * tf.log(N+1) * tf.pow(R * x, -2.5) / (tf.pow(N+1, -1.5) - 1),
-            'gradhead30': lambda x: -2.0 * tf.log(N+1) * tf.pow(R * x, -3.0) / (tf.pow(N+1, -2.0) - 1),
         }
         score2loss_dict = {
             'zero': lambda x: x * tf.log(N+1) / N,
             'tail06': lambda x: (tf.pow(x * R, 0.4) - 1) * tf.log(N+1) / (tf.pow(N+1, 0.4) - 1),
-            'tail07': lambda x: (tf.pow(x * R, 0.3) - 1) * tf.log(N+1) / (tf.pow(N+1, 0.3) - 1),
             'tail08': lambda x: (tf.pow(x * R, 0.2) - 1) * tf.log(N+1) / (tf.pow(N+1, 0.2) - 1),
-            'tail09': lambda x: (tf.pow(x * R, 0.1) - 1) * tf.log(N+1) / (tf.pow(N+1, 0.1) - 1),
             'even': lambda x: tf.log(x),
-            'head11': lambda x: (tf.pow(x * R, -0.1) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.1) - 1),
             'head12': lambda x: (tf.pow(x * R, -0.2) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.2) - 1),
-            'head13': lambda x: (tf.pow(x * R, -0.3) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.3) - 1),
             'head14': lambda x: (tf.pow(x * R, -0.4) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.4) - 1),
-            'head15': lambda x: (tf.pow(x * R, -0.5) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.5) - 1),
             'head16': lambda x: (tf.pow(x * R, -0.6) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.6) - 1),
             'head18': lambda x: (tf.pow(x * R, -0.8) - 1) * tf.log(N+1) / (tf.pow(N+1, -0.8) - 1),
             'head20': lambda x: (tf.pow(x * R, -1.0) - 1) * tf.log(N+1) / (tf.pow(N+1, -1.0) - 1),
-            'head30': lambda x: (tf.pow(x * R, -2.0) - 1) * tf.log(N+1) / (tf.pow(N+1, -2.0) - 1),
         }
         if self.weight_type.startswith('pdf'):
             print('----- use pdf dist weight')
@@ -197,7 +169,6 @@ class Model(object):
         self.mean_pair_diff = tf.reduce_mean(pair_diff)
         self.mean_rkpct = tf.reduce_mean(rk_i) / (M / 100)
         self.mean_hard_rkpct = tf.reduce_mean(hard_rk_i) / (M / 100)
-        self.print_tensor = [item_norm, item_norm_new, rk_i, rk_loss]
 
     def check_gradient(self, sess, inps):
         feed_dict = {
@@ -227,34 +198,6 @@ class Model(object):
         hard_rk_i = tf.reduce_sum(tf.nn.relu(tf.sign(-pair_diff)), -1) + 1
         self.mean_rkpct_check = tf.reduce_mean(hard_rk_i) / ((self.neg_num * self.batch_size) / 100)
 
-    def train(self, sess, inps):
-        feed_dict = {
-            self.uid_batch_ph: inps[0],
-            self.mid_batch_ph: inps[1],
-            self.mid_his_batch_ph: inps[2],
-            self.mask: inps[3],
-            self.lr: inps[4]
-        }
-        loss, _ = sess.run([self.loss, self.optimizer], feed_dict=feed_dict)
-        return loss
-
-    # def train_pt(self, sess, inps):
-    #     feed_dict = {
-    #         self.uid_batch_ph: inps[0],
-    #         self.mid_batch_ph: inps[1],
-    #         self.mid_his_batch_ph: inps[2],
-    #         self.mask: inps[3],
-    #         self.lr: inps[4],
-    #         self.neg_sample_ph: inps[5]
-    #     }
-    #     values = sess.run([self.loss, self.optimizer], feed_dict=feed_dict)
-    #     # values = sess.run([self.loss, self.optimizer] + self.print_tensor, feed_dict=feed_dict)
-    #     # for i, array in enumerate(values[2: ]):
-    #     #     print('---------- array', i)
-    #     #     print(array)
-    #     # print('----------------')
-    #     return values[0]
-
     def train_pt(self, sess, inps):
         feed_dict = {
             self.uid_batch_ph: inps[0],
@@ -265,11 +208,6 @@ class Model(object):
             self.neg_sample_ph: inps[5]
         }
         values = sess.run([self.loss, self.mean_rkpct, self.mean_hard_rkpct, self.optimizer], feed_dict=feed_dict)
-        # values = sess.run([self.loss, self.optimizer] + self.print_tensor, feed_dict=feed_dict)
-        # for i, array in enumerate(values[2: ]):
-        #     print('---------- array', i)
-        #     print(array)
-        # print('----------------')
         return values[0], values[1], values[2] # loss, rank_percent, hard_rank_percent
 
     def build_output(self):
@@ -341,7 +279,7 @@ class Model(object):
 
 class Model_DNN(Model):
     def __init__(self, n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len=256, l2_reg=0,
-                 boost_ratio=1, kernel_type='splus', weight_type='even', loss_type='sfm', unit=True):
+                 boost_ratio=1, kernel_type='splus', weight_type='even', unit=True):
         super(Model_DNN, self).__init__(n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len, flag="DNN", l2_reg=l2_reg,
             boost_ratio=boost_ratio, kernel_type=kernel_type, weight_type=weight_type, unit=unit)
 
@@ -349,17 +287,12 @@ class Model_DNN(Model):
 
         self.item_his_eb_mean = tf.reduce_sum(self.item_his_eb, 1) / (tf.reduce_sum(tf.cast(masks, dtype=tf.float32), 1) + 1e-9)
         self.user_eb = tf.layers.dense(self.item_his_eb_mean, hidden_size, activation=None)
-        if loss_type == 'smf':
-            self.build_sampled_softmax_loss(self.item_eb, self.user_eb)
-        elif loss_type == 'pt':
-            self.build_sampled_pt_loss(self.item_eb, self.user_eb)
-            self.build_output()
-        else:
-            assert False, 'loss type error'
+        self.build_sampled_pt_loss(self.item_eb, self.user_eb)
+        self.build_output()
 
 class Model_GRU4REC(Model):
     def __init__(self, n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len=256, l2_reg=0,
-                 boost_ratio=1, kernel_type='splus', weight_type='even', loss_type='sfm', unit=True):
+                 boost_ratio=1, kernel_type='splus', weight_type='even', unit=True):
         super(Model_GRU4REC, self).__init__(n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len, flag="GRU4REC", l2_reg=l2_reg,
             boost_ratio=boost_ratio, kernel_type=kernel_type, weight_type=weight_type, unit=unit)
         with tf.name_scope('rnn_1'):
@@ -369,13 +302,8 @@ class Model_GRU4REC(Model):
                                          scope="gru1")
 
         self.user_eb = final_state1
-        if loss_type == 'smf':
-            self.build_sampled_softmax_loss(self.item_eb, self.user_eb)
-        elif loss_type == 'pt':
-            self.build_sampled_pt_loss(self.item_eb, self.user_eb)
-            self.build_output()
-        else:
-            assert False, 'loss type error'
+        self.build_sampled_pt_loss(self.item_eb, self.user_eb)
+        self.build_output()
 
 
 def get_shape(inputs):
@@ -469,7 +397,7 @@ class CapsuleNetwork(tf.layers.Layer):
 
 class Model_MIND(Model):
     def __init__(self, n_mid, embedding_dim, hidden_size, batch_size, neg_num, num_interest, seq_len=256, hard_readout=True, relu_layer=True, l2_reg=0,
-                 boost_ratio=1, kernel_type='splus', weight_type='even', loss_type='sfm', unit=True):
+                 boost_ratio=1, kernel_type='splus', weight_type='even', unit=True):
         super(Model_MIND, self).__init__(n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len, flag="MIND", l2_reg=l2_reg,
             boost_ratio=boost_ratio, kernel_type=kernel_type, weight_type=weight_type, unit=unit)
 
@@ -478,17 +406,12 @@ class Model_MIND(Model):
         capsule_network = CapsuleNetwork(hidden_size, seq_len, bilinear_type=0, num_interest=num_interest, hard_readout=hard_readout, relu_layer=relu_layer)
         self.user_eb, self.readout = capsule_network(item_his_emb, self.item_eb, self.mask)
 
-        if loss_type == 'smf':
-            self.build_sampled_softmax_loss(self.item_eb, self.readout)
-        elif loss_type == 'pt':
-            self.build_sampled_pt_loss(self.item_eb, readout)
-            self.build_output()
-        else:
-            assert False, 'loss type error'
+        self.build_sampled_pt_loss(self.item_eb, readout)
+        self.build_output()
 
 class Model_ComiRec_DR(Model):
     def __init__(self, n_mid, embedding_dim, hidden_size, batch_size, neg_num, num_interest, seq_len=256, hard_readout=True, relu_layer=False, l2_reg=0,
-                 boost_ratio=1, kernel_type='splus', weight_type='even', loss_type='sfm', unit=True):
+                 boost_ratio=1, kernel_type='splus', weight_type='even', unit=True):
         super(Model_ComiRec_DR, self).__init__(n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len, flag="ComiRec_DR", l2_reg=l2_reg,
             boost_ratio=boost_ratio, kernel_type=kernel_type, weight_type=weight_type, unit=unit)
 
@@ -497,17 +420,12 @@ class Model_ComiRec_DR(Model):
         capsule_network = CapsuleNetwork(hidden_size, seq_len, bilinear_type=2, num_interest=num_interest, hard_readout=hard_readout, relu_layer=relu_layer)
         self.user_eb, self.readout = capsule_network(item_his_emb, self.item_eb, self.mask)
 
-        if loss_type == 'smf':
-            self.build_sampled_softmax_loss(self.item_eb, self.readout)
-        elif loss_type == 'pt':
-            self.build_sampled_pt_loss(self.item_eb, readout)
-            self.build_output()
-        else:
-            assert False, 'loss type error'
+        self.build_sampled_pt_loss(self.item_eb, readout)
+        self.build_output()
 
 class Model_ComiRec_SA(Model):
     def __init__(self, n_mid, embedding_dim, hidden_size, batch_size, neg_num, num_interest, seq_len=256, add_pos=True, l2_reg=0,
-                 boost_ratio=1, kernel_type='splus', weight_type='even', loss_type='sfm', unit=True):
+                 boost_ratio=1, kernel_type='splus', weight_type='even', unit=True):
         super(Model_ComiRec_SA, self).__init__(n_mid, embedding_dim, hidden_size, batch_size, neg_num, seq_len, flag="ComiRec_SA", l2_reg=l2_reg,
             boost_ratio=boost_ratio, kernel_type=kernel_type, weight_type=weight_type, unit=unit)
         
@@ -545,38 +463,28 @@ class Model_ComiRec_SA(Model):
         
         # readout = tf.layers.dense(tf.reshape(interest_emb, [-1, num_interest * self.dim]), hidden_size, activation=None)
         # self.user_eb = readout
-        if loss_type == 'smf':
-            self.build_sampled_softmax_loss(self.item_eb, readout)
-        elif loss_type == 'pt':
-            self.build_sampled_pt_loss(self.item_eb, readout)
-            self.build_output()
-        else:
-            assert False, 'loss type error'
+        self.build_sampled_pt_loss(self.item_eb, readout)
+        self.build_output()
 
 
 def get_model(dataset, model_type, item_count, batch_size, maxlen, args):
     if model_type == 'DNN':
         model = Model_DNN(item_count, args.embedding_dim, args.hidden_size, batch_size, args.neg_samples, maxlen, l2_reg=args.l2_reg,
-                          boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type
-                          , loss_type=args.loss_type, unit=args.unit)
+                          boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type, unit=args.unit)
     elif model_type == 'GRU4REC':
         model = Model_GRU4REC(item_count, args.embedding_dim, args.hidden_size, batch_size, args.neg_samples, maxlen, l2_reg=args.l2_reg,
-                              boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type
-                              , loss_type=args.loss_type, unit=args.unit)
+                              boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type, unit=args.unit)
     elif model_type == 'MIND':
         relu_layer = True if dataset == 'book' else False
         model = Model_MIND(item_count, args.embedding_dim, args.hidden_size, batch_size, args.neg_samples, args.num_interest, maxlen,
                            relu_layer=relu_layer, l2_reg=args.l2_reg,
-                           boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type
-                           , loss_type=args.loss_type, unit=args.unit)
+                           boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type, unit=args.unit)
     elif model_type == 'ComiRec-DR':
         model = Model_ComiRec_DR(item_count, args.embedding_dim, args.hidden_size, batch_size, args.neg_samples, args.num_interest, maxlen, l2_reg=args.l2_reg,
-                                 boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type
-                                 , loss_type=args.loss_type, unit=args.unit)
+                                 boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type, unit=args.unit)
     elif model_type == 'ComiRec-SA':
         model = Model_ComiRec_SA(item_count, args.embedding_dim, args.hidden_size, batch_size, args.neg_samples, args.num_interest, maxlen, l2_reg=args.l2_reg,
-                                 boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type
-                                 , loss_type=args.loss_type, unit=args.unit)
+                                 boost_ratio=args.boost_ratio, kernel_type=args.kernel_type, weight_type=args.weight_type, unit=args.unit)
     else:
         print ("Invalid model_type : %s", model_type)
         return

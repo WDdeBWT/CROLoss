@@ -1,5 +1,5 @@
 #coding:utf-8
-print('CODE-VERSION:', 1100)
+print('CODE-VERSION:', 714)
 import os
 import sys
 import csv
@@ -24,25 +24,22 @@ from data_iterator import DataIterator
 # random.seed(SEED)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-p', type=str, default='train', help='train | test')
-parser.add_argument('--dataset', type=str, default='book', help='book | taobao | almm')
+parser.add_argument('--dataset', type=str, default='book', help='book | taobao')
 parser.add_argument('--embedding_dim', type=int, default=32)
 parser.add_argument('--hidden_size', type=int, default=32)
 parser.add_argument('--batch_size', type=int, default=256) # 256 for book, 512 for taobao
 parser.add_argument('--neg_samples', type=int, default=10)
-parser.add_argument('--num_interest', type=int, default=4)
+parser.add_argument('--num_interest', type=int, default=4) # Only for MIND and ComiRec
 parser.add_argument('--model_type', type=str, default='DNN', help='DNN | GRU4REC | ..')
 parser.add_argument('--learning_rate', type=float, default=0.02, help='') # 0.02 for rkpct_i, 0.001 for rk_i
-parser.add_argument('--half_setp', type=int, default=1000, help='(k)')
 parser.add_argument('--test_iter', type=int, default=4000, help='(k)')
 parser.add_argument('--patience', type=int, default=10)
 parser.add_argument('--boost_ratio', type=float, default=10)
 parser.add_argument('--kernel_type', type=str, default='sigmoid')
 parser.add_argument('--weight_type', type=str, default='even')
-parser.add_argument('--loss_type', type=str, default='pt')
-parser.add_argument('--unit', type=int, default=1, help='')
+parser.add_argument('--unit', type=int, default=1, help='') # If unit, If unit, the user and item vectors will be normalized.
 parser.add_argument('--l2_reg', type=float, default=0, help='')
-parser.add_argument('--fast_test', type=int, default=0, help='')
+
 
 def flatten_valid_samples(user_ids, item_ids, clk_flags, urb_bhs, urb_masks):
     clk_flags = clk_flags if clk_flags is not None else [None for i in range(len(item_ids))]
@@ -57,22 +54,15 @@ def flatten_valid_samples(user_ids, item_ids, clk_flags, urb_bhs, urb_masks):
             new_urb_masks.append(urb_mask.copy())
     return new_user_ids, new_item_ids, new_clk_flags, new_urb_bhs, new_urb_masks
 
+
 def prepare_data(src, target):
     nick_id, item_id = src
     hist_item, hist_mask = target
     # user_id [b,], target_item_id [b,], urb_id [b,l], urb_mask [b,l]
     return nick_id, item_id, hist_item, hist_mask
 
-def check_pairloc_dist(check_uids, neg_sample, pairlocs_mat, ground_truth, pair_dist, pos_pair_dist):
-    for uid, pairlocs in zip(check_uids, pairlocs_mat):
-        for neg_id, pairloc in zip(neg_sample, pairlocs):
-            # assert -1 <= pairloc and pairloc <= 1, 'pairloc error: ' + str(pairloc)
-            idx = int((pairloc + 1) * 5)
-            pair_dist[idx] += 1
-            if neg_id in ground_truth[uid]:
-                pos_pair_dist[idx] += 1
 
-def evaluate_full(sess, dataset, test_data, model, model_path, batch_size, item_cate_map=None, save=True):
+def evaluate_full(sess, dataset, test_data, model, batch_size, item_cate_map=None, save=True):
     eva_start_time = time.time()
     def recall_single(u_embs, i_ids, top_n):
         part_recall = 0.0
@@ -275,7 +265,6 @@ def train(
         test_iter = 50,
         model_type = 'DNN',
         lr = 0.001,
-        half_setp = 100,
         patience = 20,
         bh_log = None):
 
@@ -290,13 +279,10 @@ def train(
         print(', '.join([key + ': %.4f' % value for key, value in metrics_200.items()]))
         print(', '.join([key + ': %.4f' % value for key, value in metrics_500.items()]))
 
-    exp_name = 'none'
-    best_model_path = "best_model/" + exp_name + '/'
-
     gpu_options = tf.GPUOptions(allow_growth=True)
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False)) as sess:
         train_data = DataIterator(train_file, batch_size, maxlen, train_flag=0)
-        valid_data = DataIterator(valid_file, batch_size, maxlen, train_flag=1, fast_test=bool(args.fast_test))
+        valid_data = DataIterator(valid_file, batch_size, maxlen, train_flag=1)
 
         model = get_model(dataset, model_type, item_count, batch_size, maxlen, args)
         sess.run(tf.global_variables_initializer())
@@ -304,11 +290,10 @@ def train(
 
         iter = 0
         best_metric = 0
-        local_half_setp = half_setp
         print('training begin')
         start_time = time.time()
         try:
-            # m_basic, m_20, m_50, m_100, m_200 = evaluate_full(sess, dataset, valid_data, model, best_model_path, batch_size)
+            # m_basic, m_20, m_50, m_100, m_200 = evaluate_full(sess, dataset, valid_data, model, batch_size)
             # print_log(0, 0, m_basic, m_20, m_50, m_100, m_200, (time.time() - start_time))
             loss_sum = 0.0
             train_rk_sum = 0.0
@@ -321,7 +306,6 @@ def train(
                 else:
                     data_iter = prepare_data(datas[0], datas[1])
 
-                # loss = model.train(sess, list(data_iter) + [lr])
                 neg_sample = np.random.randint(0, item_count, args.neg_samples * batch_size)
                 # loss = model.train_pt(sess, list(data_iter) + [lr, neg_sample])
                 loss, train_rk, train_hard_rk = model.train_pt(sess, list(data_iter) + [lr, neg_sample])
@@ -331,64 +315,19 @@ def train(
                 iter += 1
 
                 if iter % test_iter == 0:
-                    m_basic, m_20, m_50, m_100, m_200, m_500 = evaluate_full(sess, dataset, valid_data, model, best_model_path, batch_size)
+                    m_basic, m_20, m_50, m_100, m_200, m_500 = evaluate_full(sess, dataset, valid_data, model, batch_size)
                     recall_100 = m_100['recall_100']
                     if recall_100 > best_metric:
                         best_metric = recall_100
                         trials = 0
-
-                        # train_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        # train_pos_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        # for times, datas in enumerate(train_data):
-                        #     if times == 32:
-                        #         break
-                        #     assert dataset == 'book'
-                        #     data_iter = prepare_data(datas[0], datas[1])
-                        #     neg_sample = np.random.randint(0, item_count, args.neg_samples * batch_size)
-                        #     pairlocs_mat = model.output_pairloc(sess, list(data_iter) + [neg_sample])
-                        #     check_pairloc_dist(data_iter[0], neg_sample, pairlocs_mat, train_data.ground_truth, train_pair_dist, train_pos_pair_dist)
-                        # train_pair_dist = list(map(lambda x: round(100 * x / (sum(train_pair_dist) + 1e-4), 2), train_pair_dist))
-                        # train_pos_pair_dist = list(map(lambda x: round(100 * x / (sum(train_pos_pair_dist) + 1e-4), 2), train_pos_pair_dist))
-
-                        # valid_data.temp_train()
-                        # valid_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        # valid_pos_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        # for times, datas in enumerate(valid_data):
-                        #     if times == 32:
-                        #         break
-                        #     assert dataset == 'book'
-                        #     data_iter = prepare_data(datas[0], datas[1])
-                        #     neg_sample = np.random.randint(0, item_count, args.neg_samples * batch_size)
-                        #     pairlocs_mat = model.output_pairloc(sess, list(data_iter) + [neg_sample])
-                        #     check_pairloc_dist(data_iter[0], neg_sample, pairlocs_mat, valid_data.ground_truth, valid_pair_dist, valid_pos_pair_dist)
-                        # valid_pair_dist = list(map(lambda x: round(100 * x / (sum(valid_pair_dist) + 1e-4), 2), valid_pair_dist))
-                        # valid_pos_pair_dist = list(map(lambda x: round(100 * x / (sum(valid_pos_pair_dist) + 1e-4), 2), valid_pos_pair_dist))
-                        # valid_data.temp_train(False)
-
                     else:
                         trials += 1
-                        train_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        train_pos_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        valid_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                        valid_pos_pair_dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
                     print_log(iter, (loss_sum / test_iter), m_basic, m_20, m_50, m_100, m_200, m_500, (time.time() - start_time), trials)
-                    # print(train_pair_dist, '%, train_pair_dist')
-                    # print(train_pos_pair_dist, '%, train_pos_pair_dist')
-                    # print(valid_pair_dist, '%, valid_pair_dist')
-                    # print(valid_pos_pair_dist, '%, valid_pos_pair_dist')
                     print("↑ train_rkpct: %.2f%%, train_hard_rkpct: %.2f%%, total_neg_nums: %d" % (
                         train_rk_sum / test_iter, train_hard_rk_sum / test_iter, args.neg_samples * batch_size))
                     loss_sum = 0.0
                     train_rk_sum = 0.0
                     train_hard_rk_sum = 0.0
-
-                    local_half_setp -= 1
-                    if local_half_setp == 0:
-                        local_half_setp = half_setp
-                        test_iter = test_iter // 2
-                        if test_iter <= 2000:
-                            local_half_setp = 200
-                        print(('----- current test iter:', test_iter))
 
                 if trials >= patience:
                     print('-' * 89)
@@ -402,57 +341,14 @@ def train(
             print('-' * 89)
             print('Exiting from training early')
 
-        # model.restore(sess, best_model_path)
         print('Current best recall_100', best_metric)
-        # m_basic, m_20, m_50, m_100, m_200 = evaluate_full(sess, dataset, valid_data, model, best_model_path, batch_size, save=False)
+        # m_basic, m_20, m_50, m_100, m_200 = evaluate_full(sess, dataset, valid_data, model, batch_size, save=False)
         # print_log(0, 0, m_basic, m_20, m_50, m_100, m_200, (time.time() - start_time))
 
-        # test_data = DataIterator(test_file, batch_size, maxlen, train_flag=2)
-        # metrics = evaluate_full(sess, dataset, test_data, model, best_model_path, batch_size, save=False)
-        # print(', '.join(['test ' + key + ': %.6f' % value for key, value in metrics.items()]))
-
-def test(
-        test_file,
-        cate_file,
-        item_count,
-        dataset = "book",
-        batch_size = 128,
-        maxlen = 100,
-        model_type = 'DNN',
-        lr = 0.001
-):
-    exp_name = 'none'
-    best_model_path = "best_model/" + exp_name + '/'
-    # best_model_path = "../best_model_comirec/" + exp_name + '/'
-    gpu_options = tf.GPUOptions(allow_growth=True)
-    model = get_model(dataset, model_type, item_count, batch_size, maxlen)
-    # item_cate_map = load_item_cate(cate_file)
-
-    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
-        model.restore(sess, best_model_path)
-        
         test_data = DataIterator(test_file, batch_size, maxlen, train_flag=2)
-        metrics = evaluate_full(sess, dataset, test_data, model, best_model_path, batch_size, save=False)
+        m_basic, m_20, m_50, m_100, m_200 = evaluate_full(sess, dataset, test_data, model, batch_size, save=False)
+        print_log(0, 0, m_basic, m_20, m_50, m_100, m_200, (time.time() - start_time))
         print(', '.join(['test ' + key + ': %.6f' % value for key, value in metrics.items()]))
-
-def output(
-        item_count,
-        dataset = "book",
-        batch_size = 128,
-        maxlen = 100,
-        model_type = 'DNN',
-        lr = 0.001
-):
-    exp_name = 'none'
-    best_model_path = "best_model/" + exp_name + '/'
-    # best_model_path = "../best_model_comirec/" + exp_name + '/'
-    gpu_options = tf.GPUOptions(allow_growth=True)
-    model = get_model(dataset, model_type, item_count, batch_size, maxlen)
-
-    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
-        model.restore(sess, best_model_path)
-        item_embs = model.output_item(sess)
-        np.save('output/' + exp_name + '_emb.npy', item_embs)
 
 if __name__ == '__main__':
     print(sys.argv)
@@ -480,15 +376,6 @@ if __name__ == '__main__':
         cate_file = path + dataset + '_item_cate.txt'
 
     print('item_count:', item_count)
-    if args.p == 'train':
-        train(train_file=train_file, valid_file=valid_file, test_file=test_file, cate_file=cate_file, 
-              item_count=item_count, dataset=dataset, batch_size=batch_size, maxlen=maxlen, test_iter=args.test_iter, 
-              model_type=args.model_type, lr=args.learning_rate, half_setp=args.half_setp, patience=args.patience, bh_log=bh_log)
-    elif args.p == 'test':
-        test(test_file=test_file, cate_file=cate_file, item_count=item_count, dataset=dataset, batch_size=batch_size, 
-             maxlen=maxlen, model_type=args.model_type, lr=args.learning_rate)
-    elif args.p == 'output':
-        output(item_count=item_count, dataset=dataset, batch_size=batch_size, maxlen=maxlen, 
-               model_type=args.model_type, lr=args.learning_rate)
-    else:
-        print('do nothing...')
+    train(train_file=train_file, valid_file=valid_file, test_file=test_file, cate_file=cate_file, 
+          item_count=item_count, dataset=dataset, batch_size=batch_size, maxlen=maxlen, test_iter=args.test_iter, 
+          model_type=args.model_type, lr=args.learning_rate, patience=args.patience, bh_log=bh_log)

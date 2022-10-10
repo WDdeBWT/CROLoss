@@ -11,8 +11,7 @@ class DataIterator:
     def __init__(self, source,
                  batch_size=128,
                  maxlen=100,
-                 train_flag=0,
-                 fast_test=False
+                 train_flag=0
                 ):
         self.read(source)
         self.users = list(self.users)
@@ -21,11 +20,8 @@ class DataIterator:
         self.eval_batch_size = batch_size
         self.train_flag = train_flag # 0 for train , 1 for valid and 2 for test
         self.original_flag = self.train_flag
-        self.fast_test = fast_test
         self.maxlen = maxlen
         self.index = 0
-        if self.fast_test:
-            print('! Warning: Fast test mode.')
 
     def __iter__(self):
         return self
@@ -75,8 +71,6 @@ class DataIterator:
         if self.train_flag == 0:
             user_id_list = random.sample(self.users, self.batch_size)
         else:
-            if self.fast_test:
-                self.index += random.randint(0, 6 * self.eval_batch_size)
             total_user = len(self.users)
             if self.index >= total_user:
                 self.index = 0
