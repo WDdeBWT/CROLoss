@@ -107,15 +107,15 @@ class Model(object):
             'distgamma2': tf.distributions.Gamma(concentration=1.1, rate=0.05),
         }
         pari2grad_dict = {
-            'gradzero': lambda x: tf.ones_like(x) * tf.log(N+1) / N,
-            'gradtail06': lambda x: 0.4 * tf.log(N+1) * tf.pow(R * x, -0.6) / (tf.pow(N+1, 0.4) - 1),
-            'gradtail08': lambda x: 0.2 * tf.log(N+1) * tf.pow(R * x, -0.8) / (tf.pow(N+1, 0.2) - 1),
-            'gradeven': lambda x: 1 / x,
-            'gradhead12': lambda x: -0.2 * tf.log(N+1) * tf.pow(R * x, -1.2) / (tf.pow(N+1, -0.2) - 1),
-            'gradhead14': lambda x: -0.4 * tf.log(N+1) * tf.pow(R * x, -1.4) / (tf.pow(N+1, -0.4) - 1),
-            'gradhead16': lambda x: -0.6 * tf.log(N+1) * tf.pow(R * x, -1.6) / (tf.pow(N+1, -0.6) - 1),
-            'gradhead18': lambda x: -0.8 * tf.log(N+1) * tf.pow(R * x, -1.8) / (tf.pow(N+1, -0.8) - 1),
-            'gradhead20': lambda x: -1.0 * tf.log(N+1) * tf.pow(R * x, -2.0) / (tf.pow(N+1, -1.0) - 1),
+            'lambdazero': lambda x: tf.ones_like(x) * tf.log(N+1) / N,
+            'lambdatail06': lambda x: 0.4 * tf.log(N+1) * tf.pow(R * x, -0.6) / (tf.pow(N+1, 0.4) - 1),
+            'lambdatail08': lambda x: 0.2 * tf.log(N+1) * tf.pow(R * x, -0.8) / (tf.pow(N+1, 0.2) - 1),
+            'lambdaeven': lambda x: 1 / x,
+            'lambdahead12': lambda x: -0.2 * tf.log(N+1) * tf.pow(R * x, -1.2) / (tf.pow(N+1, -0.2) - 1),
+            'lambdahead14': lambda x: -0.4 * tf.log(N+1) * tf.pow(R * x, -1.4) / (tf.pow(N+1, -0.4) - 1),
+            'lambdahead16': lambda x: -0.6 * tf.log(N+1) * tf.pow(R * x, -1.6) / (tf.pow(N+1, -0.6) - 1),
+            'lambdahead18': lambda x: -0.8 * tf.log(N+1) * tf.pow(R * x, -1.8) / (tf.pow(N+1, -0.8) - 1),
+            'lambdahead20': lambda x: -1.0 * tf.log(N+1) * tf.pow(R * x, -2.0) / (tf.pow(N+1, -1.0) - 1),
         }
         score2loss_dict = {
             'zero': lambda x: x * tf.log(N+1) / N,
@@ -137,10 +137,10 @@ class Model(object):
             print('----- use cdf dist weight')
             dist = distribution_dict[self.weight_type[3:]]
             rk_loss = tf.reduce_mean(dist.cdf(rkpct_i))
-        elif self.weight_type.startswith('grad'):
+        elif self.weight_type.startswith('lambda'):
             # print('!!!!!!!! ----- hard weight and splus rki')
             # rk_loss = tf.reduce_mean(tf.stop_gradient(pari2grad_dict[self.weight_type](hard_rk_i)) * rk_i)
-            print('!!!!! ----- sigmoid weight and splus rki !!!!!')
+            print('----- lambda(sigmoid) weight')
             sig_rk_i = tf.reduce_sum(kernel_dict['sigmoid'](pair_diff * -self.boost_ratio), -1) + 1 # [b, ]
             rk_loss = tf.reduce_mean(tf.stop_gradient(pari2grad_dict[self.weight_type](sig_rk_i)) * rk_i)
         else:

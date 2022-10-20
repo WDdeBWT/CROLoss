@@ -257,7 +257,6 @@ def train(
         train_file,
         valid_file,
         test_file,
-        cate_file,
         item_count,
         dataset = "book",
         batch_size = 128,
@@ -364,7 +363,6 @@ if __name__ == '__main__':
         train_file = path + dataset + '_train.txt'
         valid_file = path + dataset + '_valid.txt'
         test_file = path + dataset + '_test.txt'
-        cate_file = path + dataset + '_item_cate.txt'
     elif dataset == 'book':
         path = './data/book_data/'
         item_count = 367983
@@ -373,9 +371,8 @@ if __name__ == '__main__':
         train_file = path + dataset + '_train.txt'
         valid_file = path + dataset + '_valid.txt'
         test_file = path + dataset + '_test.txt'
-        cate_file = path + dataset + '_item_cate.txt'
 
     print('item_count:', item_count)
-    train(train_file=train_file, valid_file=valid_file, test_file=test_file, cate_file=cate_file, 
-          item_count=item_count, dataset=dataset, batch_size=batch_size, maxlen=maxlen, test_iter=args.test_iter, 
-          model_type=args.model_type, lr=args.learning_rate, patience=args.patience, bh_log=bh_log)
+    train(train_file=train_file, valid_file=valid_file, test_file=test_file, item_count=item_count, dataset=dataset, 
+          batch_size=batch_size, maxlen=maxlen, test_iter=args.test_iter, model_type=args.model_type, 
+          lr=args.learning_rate, patience=args.patience, bh_log=bh_log)
